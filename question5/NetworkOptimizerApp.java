@@ -1,153 +1,184 @@
-package question5;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.*;
-import java.util.List;  // Ensure this import is included
-import java.util.ArrayList;  // You might also need this for creating ArrayLists
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 
+class Graph {
+    private final Map<String, Map<String, Integer>> adjacencyList = new HashMap<>();
 
-public class NetworkOptimizerApp {
-
-    // NetworkGraph class representing the network structure
-    static class NetworkGraph {
-        private final Map<String, Map<String, Edge>> adjacencyList = new HashMap<>();
-
-        public void addNode(String nodeName) {
-            adjacencyList.putIfAbsent(nodeName, new HashMap<>());
-        }
-
-        public void addEdge(String from, String to, int cost, int bandwidth) {
-            adjacencyList.get(from).put(to, new Edge(cost, bandwidth));
-            adjacencyList.get(to).put(from, new Edge(cost, bandwidth)); // undirected graph
-        }
-
-        public Map<String, Map<String, Edge>> getAdjacencyList() {
-            return adjacencyList;
-        }
+    public void addNode(String node) {
+        adjacencyList.putIfAbsent(node, new HashMap<>());
     }
 
-    // Edge class to store cost and bandwidth for each connection
+    public void addEdge(String node1, String node2, int cost) {
+        adjacencyList.get(node1).put(node2, cost);
+        adjacencyList.get(node2).put(node1, cost);
+    }
+
+    public Map<String, Map<String, Integer>> getAdjacencyList() {
+        return adjacencyList;
+    }
+
+    public List<String> dijkstra(String start, String end) {
+        Map<String, Integer> distances = new HashMap<>();
+        Map<String, String> previous = new HashMap<>();
+        PriorityQueue<String> queue = new PriorityQueue<>(Comparator.comparingInt(distances::get));
+
+        for (String node : adjacencyList.keySet()) {
+            distances.put(node, Integer.MAX_VALUE);
+            previous.put(node, null);
+        }
+        distances.put(start, 0);
+        queue.add(start);
+
+        while (!queue.isEmpty()) {
+            String current = queue.poll();
+            if (current.equals(end)) break;
+
+            for (Map.Entry<String, Integer> neighbor : adjacencyList.get(current).entrySet()) {
+                int newDist = distances.get(current) + neighbor.getValue();
+                if (newDist < distances.get(neighbor.getKey())) {
+                    distances.put(neighbor.getKey(), newDist);
+                    previous.put(neighbor.getKey(), current);
+                    queue.add(neighbor.getKey());
+                }
+            }
+        }
+
+        List<String> path = new ArrayList<>();
+        for (String at = end; at != null; at = previous.get(at)) {
+            path.add(at);
+        }
+        Collections.reverse(path);
+        return path.isEmpty() || !path.get(0).equals(start) ? Collections.emptyList() : path;
+    }
+
+    public List<String[]> primMST() {
+        Set<String> visited = new HashSet<>();
+        PriorityQueue<Edge> pq = new PriorityQueue<>(Comparator.comparingInt(e -> e.cost));
+        List<String[]> mstEdges = new ArrayList<>();
+
+        String startNode = adjacencyList.keySet().iterator().next();
+        visited.add(startNode);
+        for (var entry : adjacencyList.get(startNode).entrySet()) {
+            pq.add(new Edge(startNode, entry.getKey(), entry.getValue()));
+        }
+
+        while (!pq.isEmpty() && visited.size() < adjacencyList.size()) {
+            Edge edge = pq.poll();
+            if (visited.contains(edge.to)) continue;
+
+            visited.add(edge.to);
+            mstEdges.add(new String[]{edge.from, edge.to, String.valueOf(edge.cost)});
+
+            for (var entry : adjacencyList.get(edge.to).entrySet()) {
+                if (!visited.contains(entry.getKey())) {
+                    pq.add(new Edge(edge.to, entry.getKey(), entry.getValue()));
+                }
+            }
+        }
+        return mstEdges;
+    }
+
     static class Edge {
+        String from, to;
         int cost;
-        int bandwidth;
-
-        Edge(int cost, int bandwidth) {
-            this.cost = cost;
-            this.bandwidth = bandwidth;
-        }
+        Edge(String from, String to, int cost) { this.from = from; this.to = to; this.cost = cost; }
     }
+}
 
-    // GraphAlgorithm class to implement Dijkstra and Prim's algorithms
-    static class GraphAlgorithm {
+public class NetworkOptimizer extends JFrame {
+    private final Graph graph = new Graph();
+    private final JTextField nodeField = new JTextField(10);
+    private final JTextField node1Field = new JTextField(5);
+    private final JTextField node2Field = new JTextField(5);
+    private final JTextField costField = new JTextField(5);
+    private final JTextArea outputArea = new JTextArea(10, 30);
 
-        // Dijkstra's algorithm for shortest path considering bandwidth as weight
-        public static List<String> dijkstra(NetworkGraph graph, String start, String end) {
-            Map<String, Integer> distances = new HashMap<>();
-            Map<String, String> previousNodes = new HashMap<>();
-            PriorityQueue<String> priorityQueue = new PriorityQueue<>(Comparator.comparingInt(distances::get));
+    public NetworkOptimizer() {
+        setTitle("Network Topology Optimizer");
+        setSize(500, 400);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new FlowLayout());
 
-            for (String node : graph.getAdjacencyList().keySet()) {
-                distances.put(node, Integer.MAX_VALUE);
-            }
-            distances.put(start, 0);
-            priorityQueue.add(start);
+        add(new JLabel("Node:"));
+        add(nodeField);
+        JButton addNodeButton = new JButton("Add Node");
+        add(addNodeButton);
 
-            while (!priorityQueue.isEmpty()) {
-                String current = priorityQueue.poll();
-                if (current.equals(end)) break;
+        add(new JLabel("Edge (Node1 - Node2 - Cost):"));
+        add(node1Field);
+        add(node2Field);
+        add(costField);
+        JButton addEdgeButton = new JButton("Add Edge");
+        add(addEdgeButton);
 
-                for (Map.Entry<String, Edge> entry : graph.getAdjacencyList().get(current).entrySet()) {
-                    String neighbor = entry.getKey();
-                    Edge edge = entry.getValue();
-                    int newDist = distances.get(current) + edge.cost;
+        JButton findPathButton = new JButton("Find Shortest Path");
+        add(findPathButton);
 
-                    if (newDist < distances.get(neighbor)) {
-                        distances.put(neighbor, newDist);
-                        previousNodes.put(neighbor, current);
-                        priorityQueue.add(neighbor);
-                    }
-                }
-            }
+        JButton optimizeButton = new JButton("Optimize (MST)");
+        add(optimizeButton);
 
-            // Reconstruct path
-            List<String> path = new ArrayList<>();
-            String current = end;
-            while (current != null) {
-                path.add(current);
-                current = previousNodes.get(current);
-            }
-            Collections.reverse(path);
-            return path;
-        }
-    }
+        outputArea.setEditable(false);
+        add(new JScrollPane(outputArea));
 
-    // NetworkGUI class for creating the user interface
-    static class NetworkGUI extends JFrame {
-        private final NetworkGraph graph;
-        private final JTextArea displayArea;
-
-        public NetworkGUI(NetworkGraph graph) {
-            this.graph = graph;
-            this.displayArea = new JTextArea(10, 40);
-            displayArea.setEditable(false);
-
-            setTitle("Network Optimizer");
-            setLayout(new BorderLayout());
-
-            // Add nodes, edges input panel
-            JPanel inputPanel = new JPanel();
-            inputPanel.setLayout(new FlowLayout());
-            JTextField nodeField = new JTextField(10);
-            JButton addNodeButton = new JButton("Add Node");
-            JButton addEdgeButton = new JButton("Add Edge");
-
-            inputPanel.add(new JLabel("Node Name:"));
-            inputPanel.add(nodeField);
-            inputPanel.add(addNodeButton);
-            inputPanel.add(addEdgeButton);
-
-            // Add action listeners
-            addNodeButton.addActionListener(e -> {
-                String nodeName = nodeField.getText();
-                if (!nodeName.isEmpty()) {
-                    graph.addNode(nodeName);
-                    displayArea.append("Node added: " + nodeName + "\n");
-                    nodeField.setText("");
-                }
-            });
-
-            addEdgeButton.addActionListener(e -> {
-                String fromNode = nodeField.getText();
-                String toNode = JOptionPane.showInputDialog("Enter destination node:");
-                int cost = Integer.parseInt(JOptionPane.showInputDialog("Enter cost:"));
-                int bandwidth = Integer.parseInt(JOptionPane.showInputDialog("Enter bandwidth:"));
-                graph.addEdge(fromNode, toNode, cost, bandwidth);
-                displayArea.append("Edge added: " + fromNode + " <-> " + toNode + " (Cost: " + cost + ", Bandwidth: " + bandwidth + ")\n");
+        addNodeButton.addActionListener(e -> {
+            String node = nodeField.getText().trim();
+            if (!node.isEmpty()) {
+                graph.addNode(node);
+                outputArea.append("Node added: " + node + "\n");
                 nodeField.setText("");
-            });
+            }
+        });
 
-            // Add display area for results
-            JScrollPane scrollPane = new JScrollPane(displayArea);
-            add(scrollPane, BorderLayout.CENTER);
-            add(inputPanel, BorderLayout.NORTH);
+        addEdgeButton.addActionListener(e -> {
+            String node1 = node1Field.getText().trim();
+            String node2 = node2Field.getText().trim();
+            String costText = costField.getText().trim();
+        
+            if (!node1.isEmpty() && !node2.isEmpty() && !costText.isEmpty()) {
+                try {
+                    int cost = Integer.parseInt(costText); // Ensure valid integer input
+                    graph.addEdge(node1, node2, cost);
+                    outputArea.append("Edge added: " + node1 + " - " + node2 + " (Cost: " + cost + ")\n");
+        
+                    // Clear input fields after adding an edge
+                    node1Field.setText("");
+                    node2Field.setText("");
+                    costField.setText("");
+        
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this, "Invalid cost! Please enter a valid number.", "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            } else {
+                JOptionPane.showMessageDialog(this, "Please fill all fields before adding an edge.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        
 
-            // Set window size and visibility
-            setSize(600, 400);
-            setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            setVisible(true);
-        }
+        findPathButton.addActionListener(e -> {
+            String start = JOptionPane.showInputDialog(this, "Enter Start Node:");
+            String end = JOptionPane.showInputDialog(this, "Enter End Node:");
+            if (start != null && end != null) {
+                List<String> path = graph.dijkstra(start, end);
+                outputArea.append(path.isEmpty() ? "No path found!\n" : "Shortest Path: " + path + "\n");
+            }
+        });
+
+        optimizeButton.addActionListener(e -> {
+            List<String[]> mst = graph.primMST();
+            outputArea.append("Optimized Network (MST):\n");
+            for (String[] edge : mst) {
+                outputArea.append(edge[0] + " - " + edge[1] + " (Cost: " + edge[2] + ")\n");
+            }
+        });
+
+        setVisible(true);
     }
 
-    // Main function to run the application
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            NetworkGraph networkGraph = new NetworkGraph();
-            new NetworkGUI(networkGraph);
-        });
+        SwingUtilities.invokeLater(NetworkOptimizer::new);
     }
 }
